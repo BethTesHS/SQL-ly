@@ -10,11 +10,7 @@
 
     <div class="sidebar">
         <div class="logo">SQL-ly</div>
-        <div class="nav-item active" onclick="showSection('home')">Home</div>
-        <div class="nav-item" onclick="showSection('console')">SQL Console</div>
-        <div class="nav-item" onclick="showSection('debug')">Table View</div>
-        
-        <div style="margin-top: 20px; font-weight: bold; color: #64748b; font-size: 0.8rem;">DATABASES</div>
+        <div style="margin-top: 0px; font-weight: bold; color: #64748b; font-size: 0.8rem;">DATABASES</div>
         <div class="db-list" id="dbList">
             </div>
         <button class="btn" style="width: 100%; margin: 0; margin-top: 10px; font-size: 0.8rem;" onclick="createNewDb()">+ New Database</button>
@@ -22,6 +18,12 @@
 
     <div class="main">
         
+        <div class="tabs">
+            <div class="tab-item active" onclick="showSection('home')">Home</div>
+            <div class="tab-item" onclick="showSection('console')">SQL Console</div>
+            <div class="tab-item" onclick="showSection('debug')">Table View</div>
+        </div>
+
         <div id="home" class="section active">
             <div class="hero">
                 <h1>Welcome to SQL-ly</h1>
@@ -39,9 +41,8 @@
         <div id="console" class="section">
             <h2 id="consoleTitle">Console (default)</h2>
             <div class="console-container">
-                <div class="console-output" id="output">
-Welcome to SQL-ly Web Console.
-Type SQL commands (e.g., SELECT * FROM users)
+                <div class="console-output" id="output"> 
+                    Welcome to SQL-ly Web Console. Type SQL commands (e.g., SELECT * FROM users)
                 </div>
                 <div class="console-input-line">
                     <span class="prompt">SQL&gt;</span>
@@ -69,12 +70,12 @@ Type SQL commands (e.g., SELECT * FROM users)
         // --- Navigation ---
         function showSection(id) {
             document.querySelectorAll('.section').forEach(el => el.classList.remove('active'));
-            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-item').forEach(el => el.classList.remove('active'));
             document.getElementById(id).classList.add('active');
             
             // Highlight nav
             const navIndex = ['home', 'console', 'debug'].indexOf(id);
-            if(navIndex >= 0) document.querySelectorAll('.nav-item')[navIndex].classList.add('active');
+            if(navIndex >= 0) document.querySelectorAll('.tab-item')[navIndex].classList.add('active');
         }
 
         // --- Database Management ---
