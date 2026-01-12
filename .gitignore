@@ -3,3 +3,4 @@
 appsettings.json
 appsettings.Development.json
 CommitTypes.md
+*.db

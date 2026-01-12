@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SQL-ly RDBMS</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+    <div class="sidebar">
+        <div class="logo">SQL-ly</div>
+        <div class="nav-item active" onclick="showSection('home')">Home</div>
+        <div class="nav-item" onclick="showSection('console')">SQL Console</div>
+        <div class="nav-item" onclick="showSection('debug')">Table View</div>
+        
+        <div style="margin-top: 20px; font-weight: bold; color: #64748b; font-size: 0.8rem;">DATABASES</div>
+        <div class="db-list" id="dbList">
+            </div>
+        <button class="btn" style="width: 100%; margin: 0; margin-top: 10px; font-size: 0.8rem;" onclick="createNewDb()">+ New Database</button>
+    </div>
+
+    <div class="main">
+        
+        <div id="home" class="section active">
+            <div class="hero">
+                <h1>Welcome to SQL-ly</h1>
+                <p style="color: #94a3b8; max-width: 600px; margin: 0 auto 30px auto;">
+                    A lightweight, file-based Relational Database Management System running on .NET 9.0.
+                    Select a database to start querying or analyze data in the Table View.
+                </p>
+                <div>
+                    <button class="btn" onclick="createNewDb()">Create New Database</button>
+                    <button class="btn btn-outline" onclick="showSection('console')">Open Console</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="console" class="section">
+            <h2 id="consoleTitle">Console (default)</h2>
+            <div class="console-container">
+                <div class="console-output" id="output">
+Welcome to SQL-ly Web Console.
+Type SQL commands (e.g., SELECT * FROM users)
+                </div>
+                <div class="console-input-line">
+                    <span class="prompt">SQL&gt;</span>
+                    <input type="text" class="cmd-input" id="cmdInput" placeholder="Type command..." autofocus>
+                </div>
+            </div>
+        </div>
+
+        <div id="debug" class="section">
+            <h2 id="debugTitle">Table View (default)</h2>
+            <div style="margin-bottom: 20px;">
+                <button class="btn btn-outline" onclick="loadTable('users')" style="font-size: 0.8rem; padding: 5px 10px;">Users Table</button>
+                <button class="btn btn-outline" onclick="loadTable('orders')" style="font-size: 0.8rem; padding: 5px 10px;">Orders Table</button>
+            </div>
+            <div id="tableContainer">
+                <p style="color: #64748b;">Select a table above to view raw data.</p>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        let currentDb = 'default';
+
+        // --- Navigation ---
+        function showSection(id) {
+            document.querySelectorAll('.section').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+            
+            // Highlight nav
+            const navIndex = ['home', 'console', 'debug'].indexOf(id);
+            if(navIndex >= 0) document.querySelectorAll('.nav-item')[navIndex].classList.add('active');
+        }
+
+        // --- Database Management ---
+        async function fetchDbs() {
+            const res = await fetch('/api/dbs');
+            const dbs = await res.json();
+            const list = document.getElementById('dbList');
+            list.innerHTML = '';
+            dbs.forEach(db => {
+                const div = document.createElement('div');
+                div.className = `db-item ${db === currentDb ? 'active' : ''}`;
+                div.textContent = db;
+                div.onclick = () => switchDb(db);
+                list.appendChild(div);
+            });
+        }
+
+        async function createNewDb() {
+            const name = prompt("Enter new database name:");
+            if (!name) return;
+            const res = await fetch(`/api/dbs/${name}`, { method: 'POST' });
+            if (res.ok) {
+                await fetchDbs();
+                switchDb(name);
+                alert("Database created!");
+            } else {
+                alert("Error creating database (might already exist).");
+            }
+        }
+
+        function switchDb(name) {
+            currentDb = name;
+            document.getElementById('consoleTitle').textContent = `Console (${name})`;
+            document.getElementById('debugTitle').textContent = `Table View (${name})`;
+            document.getElementById('output').innerText += `\n[Switched to ${name}]\n`;
+            fetchDbs(); // re-render list
+        }
+
+        // --- Console ---
+        document.getElementById('cmdInput').addEventListener('keypress', async function (e) {
+            if (e.key === 'Enter') {
+                const sql = this.value;
+                if (!sql.trim()) return;
+                
+                // Print Command
+                const out = document.getElementById('output');
+                out.innerText += `\nSQL> ${sql}\n`;
+                this.value = '';
+
+                // Execute
+                try {
+                    const res = await fetch(`/api/query?db=${currentDb}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(sql)
+                    });
+                    const text = await res.json(); // The API returns string result as JSON string
+                    out.innerText += text + "\n";
+                } catch (err) {
+                    out.innerText += "Error connecting to server.\n";
+                }
+                
+                // Scroll to bottom
+                out.scrollTop = out.scrollHeight;
+            }
+        });
+
+        // --- Table View ---
+        async function loadTable(tableName) {
+            const container = document.getElementById('tableContainer');
+            container.innerHTML = 'Loading...';
+            
+            try {
+                const res = await fetch(`/api/dbs/${currentDb}/tables/${tableName}`);
+                if (!res.ok) {
+                    container.innerHTML = '<span style="color:red">Table not found or empty.</span>';
+                    return;
+                }
+                const data = await res.json();
+                
+                if (data.length === 0) {
+                    container.innerHTML = 'Table is empty.';
+                    return;
+                }
+
+                // Build HTML Table dynamically
+                const cols = Object.keys(data[0]);
+                let html = '<table><thead><tr>';
+                cols.forEach(c => html += `<th>${c}</th>`);
+                html += '</tr></thead><tbody>';
+                
+                data.forEach(row => {
+                    html += '<tr>';
+                    cols.forEach(c => html += `<td>${row[c]}</td>`);
+                    html += '</tr>';
+                });
+                html += '</tbody></table>';
+                container.innerHTML = html;
+
+            } catch (err) {
+                container.innerHTML = `Error loading table: ${err}`;
+            }
+        }
+
+        // Init
+        fetchDbs();
+    </script>
+</body>
+</html>

@@ -1,41 +1,56 @@
-
 using RDBMS.Engine;
 using Microsoft.AspNetCore.Mvc;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 1. Register our Database Engine as a Singleton
-var db = new Database();
-builder.Services.AddSingleton(db);
+// 1. Register Database Manager (holds all databases)
+var dbManager = new DatabaseManager();
+builder.Services.AddSingleton(dbManager);
 
 var app = builder.Build();
 
-// 2. Start the REPL in the background (Interactive Mode)
-new Repl(db).Start();
+// 2. Start REPL for the "default" database (Server-side interactive mode)
+new Repl(dbManager.GetDatabase("default")).Start();
 
-// 3. Web API Endpoints (The Trivial Web App)
+// 3. Enable Static Files for the UI
+app.UseDefaultFiles();
+app.UseStaticFiles();
 
-app.MapGet("/", () => "Welcome to SharpBase Web Interface. Try GET /users or POST /query");
+// 4. API Endpoints
 
-// API: Get all users
-app.MapGet("/users", (Database db) => 
+// List all databases
+app.MapGet("/api/dbs", (DatabaseManager mgr) => mgr.ListDatabases());
+
+// Create a new database
+app.MapPost("/api/dbs/{name}", (string name, DatabaseManager mgr) => 
 {
-    // Using the engine's internal methods directly
-    return db.Tables["users"].SelectAll().Select(r => r.Data);
+    if (mgr.GetDatabase(name) != null) return Results.Conflict("Database exists");
+    mgr.CreateDatabase(name);
+    return Results.Ok($"Database {name} created.");
 });
 
-// API: Run raw SQL via Web
-app.MapPost("/query", ([FromBody] string sql, Database db) => 
+// Run SQL Query against a specific DB
+app.MapPost("/api/query", ([FromQuery] string db, [FromBody] string sql, DatabaseManager mgr) => 
 {
-    return db.ExecuteSql(sql);
+    var database = mgr.GetDatabase(db);
+    if (database == null) return Results.NotFound("Database not found.");
+    return Results.Ok(database.ExecuteSql(sql));
 });
 
-// Seed data if empty (For demo purposes)
-if (db.Tables["users"].SelectAll().Count == 0)
+// DEBUG API: Get Table Data (raw JSON for the frontend grid)
+app.MapGet("/api/dbs/{dbName}/tables/{tableName}", (string dbName, string tableName, DatabaseManager mgr) => 
 {
-    db.ExecuteSql("INSERT INTO users VALUES (101, \"John Doe\", 25)");
-    db.ExecuteSql("INSERT INTO users VALUES (102, \"Jane Smith\", 30)");
-    db.ExecuteSql("INSERT INTO orders VALUES (501, 101, \"Laptop\")"); // User 101 bought Laptop
-}
+    var database = mgr.GetDatabase(dbName);
+    if (database == null) return Results.NotFound("Database not found");
+    
+    if (!database.Tables.ContainsKey(tableName)) return Results.NotFound("Table not found");
+
+    // Extract data for JSON response
+    var rows = database.Tables[tableName].SelectAll().Select(r => r.Data);
+    return Results.Ok(rows);
+});
+
+// Fallback for SPA
+app.MapFallbackToFile("index.html");
 
 app.Run();

@@ -7,30 +7,39 @@ namespace RDBMS.Engine
 {
     public class Database
     {
+        public string Name { get; private set; }
         public Dictionary<string, Table> Tables { get; set; } = new();
 
-        public Database()
+        public Database(string name = "default")
         {
-            // Seed a default table for the challenge
-            // REQ: Declaring tables
+            Name = name;
+
+            // Initialize Tables with the DB Name prefix
             var userCols = new List<ColumnDef> 
             { 
                 new ColumnDef { Name = "id", Type = DbType.Int, IsPrimaryKey = true },
                 new ColumnDef { Name = "username", Type = DbType.String },
                 new ColumnDef { Name = "age", Type = DbType.Int }
             };
-            Tables.Add("users", new Table("users", userCols));
+            Tables.Add("users", new Table(Name, "users", userCols));
 
             var orderCols = new List<ColumnDef>
             {
                 new ColumnDef { Name = "id", Type = DbType.Int, IsPrimaryKey = true },
-                new ColumnDef { Name = "user_id", Type = DbType.Int }, // FK
+                new ColumnDef { Name = "user_id", Type = DbType.Int }, 
                 new ColumnDef { Name = "item", Type = DbType.String }
             };
-            Tables.Add("orders", new Table("orders", orderCols));
+            Tables.Add("orders", new Table(Name, "orders", orderCols));
+
+            // Seed Initial Data if empty
+            if (Tables["users"].SelectAll().Count == 0)
+            {
+                ExecuteSql("INSERT INTO users VALUES (101, \"John Doe\", 25)");
+                ExecuteSql("INSERT INTO users VALUES (102, \"Jane Smith\", 30)");
+                ExecuteSql("INSERT INTO orders VALUES (501, 101, \"Laptop\")");
+            }
         }
 
-        // REQ: Interface should be SQL or something similar
         public string ExecuteSql(string sql)
         {
             try 
@@ -51,10 +60,8 @@ namespace RDBMS.Engine
             }
         }
 
-        // PARSER: INSERT INTO users VALUES (1, "Alice", 30)
         private string HandleInsert(string sql)
         {
-            // Very naive parsing for the challenge
             var tableName = sql.Split(new[] { "INTO ", " VALUES" }, StringSplitOptions.None)[1].Trim();
             var valuesPart = sql.Split("VALUES")[1].Trim().Trim('(', ')');
             var values = valuesPart.Split(',');
@@ -64,7 +71,6 @@ namespace RDBMS.Engine
             var table = Tables[tableName];
             var row = new Row();
             
-            // Manual mapping of parsed values to schema
             int valIndex = 0;
             foreach(var col in table.Schema.Columns)
             {
@@ -81,66 +87,66 @@ namespace RDBMS.Engine
             return "Row inserted successfully.";
         }
 
-        // PARSER: SELECT * FROM users [JOIN orders ON ...] [WHERE id=1]
-        // REQ: Some Joining
         private string HandleSelect(string sql)
         {
-            // Check for JOIN
-            if (sql.ToUpper().Contains("JOIN"))
-            {
-                return HandleJoin(sql);
-            }
+            if (sql.ToUpper().Contains("JOIN")) return HandleJoin(sql);
 
             var parts = sql.Split(' ');
-            var tableName = parts[3]; // SELECT * FROM [table]
+            var tableName = parts.Length > 3 ? parts[3] : "";
+            
+            // Basic error checking
+            if(string.IsNullOrEmpty(tableName) || !Tables.ContainsKey(tableName)) 
+                return "Table not found. Usage: SELECT * FROM [table]";
 
-            if (!Tables.ContainsKey(tableName)) return "Table not found.";
             var table = Tables[tableName];
 
-            // Check for simple Primary Key Index lookup
-            // REQ: Indexing usage
             if (sql.ToUpper().Contains("WHERE ID="))
             {
                 var idStr = sql.Split('=')[1].Trim();
-                int id = int.Parse(idStr);
-                var row = table.SelectById(id);
-                return row == null ? "No results." : FormatRow(row);
+                if (int.TryParse(idStr, out int id))
+                {
+                    var row = table.SelectById(id);
+                    return row == null ? "No results." : FormatRow(row);
+                }
             }
 
-            // Full Scan
             var rows = table.SelectAll();
             return FormatRows(rows);
         }
 
-        // REQ: Implementation of Joining (Nested Loop Join)
         private string HandleJoin(string sql)
         {
-            // Syntax: SELECT * FROM users JOIN orders ON users.id = orders.user_id
-            var joinSplit = sql.Split(new[] { " JOIN ", " ON " }, StringSplitOptions.None);
-            var table1Name = joinSplit[0].Split("FROM")[1].Trim();
-            var table2Name = joinSplit[1].Trim();
-            var condition = joinSplit[2].Trim(); // users.id = orders.user_id
-
-            var t1 = Tables[table1Name];
-            var t2 = Tables[table2Name];
-
-            var results = new StringBuilder();
-            results.AppendLine($"--- JOIN RESULT ({table1Name} + {table2Name}) ---");
-
-            // Nested Loop Join Algorithm
-            foreach (var r1 in t1.SelectAll())
+            try
             {
-                foreach (var r2 in t2.SelectAll())
+                var joinSplit = sql.Split(new[] { " JOIN ", " ON " }, StringSplitOptions.None);
+                var table1Name = joinSplit[0].Split("FROM")[1].Trim();
+                var table2Name = joinSplit[1].Trim();
+                
+                if(!Tables.ContainsKey(table1Name) || !Tables.ContainsKey(table2Name))
+                    return "One or more tables not found.";
+
+                var t1 = Tables[table1Name];
+                var t2 = Tables[table2Name];
+
+                var results = new StringBuilder();
+                results.AppendLine($"--- JOIN RESULT ({table1Name} + {table2Name}) ---");
+
+                foreach (var r1 in t1.SelectAll())
                 {
-                    // Hardcoded check for this challenge example: users.id == orders.user_id
-                    // In a real DB, you'd parse the condition string dynamically
-                    if (r1.Id == (int)r2.Data["user_id"])
+                    foreach (var r2 in t2.SelectAll())
                     {
-                        results.AppendLine($"{r1.Data["username"]} bought {r2.Data["item"]}");
+                        if (r1.Id == (int)r2.Data["user_id"])
+                        {
+                            results.AppendLine($"{r1.Data["username"]} bought {r2.Data["item"]}");
+                        }
                     }
                 }
+                return results.ToString();
             }
-            return results.ToString();
+            catch
+            {
+                return "Error parsing JOIN syntax.";
+            }
         }
 
         private string FormatRow(Row row) => System.Text.Json.JsonSerializer.Serialize(row.Data);

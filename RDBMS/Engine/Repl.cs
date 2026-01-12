@@ -19,7 +19,7 @@ namespace RDBMS.Engine
                 // Give the web server a second to start logs
                 System.Threading.Thread.Sleep(1000); 
                 Console.WriteLine("\n=================================");
-                Console.WriteLine("   SHARPBASE REPL READY");
+                Console.WriteLine("   SQL-ly REPL READY");
                 Console.WriteLine("   Try: INSERT INTO users VALUES (1, \"Admin\", 99)");
                 Console.WriteLine("=================================\n");
 
