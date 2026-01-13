@@ -36,15 +36,42 @@
         </div>
 
         <div id="home" class="section active">
-            <div class="hero">
+            <div class="main-content">
                 <h1>Welcome to SQLly</h1>
-                <p style="max-width: 600px; margin: 0 auto 30px auto;">
+                <p style="max-width: 600px; margin: 0 auto 20px auto; opacity: 0.8;">
                     A lightweight, file-based Relational Database Management System running on .NET 9.0.
-                    Select a database to start querying or analyze data in the Table View.
                 </p>
+                
+                <div style="background-color: var(--card-bg); padding: 25px; border-radius: 8px; border: 1px solid var(--border); max-width: 700px; margin: 0 auto 30px auto; text-align: left; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+                    <h3 style="margin-top: 0; color: var(--accent-blue);">Choose Your Interface</h3>
+                    <p>You can interact with your databases in two ways:</p>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <strong>1. Web Interface (GUI)</strong><br>
+                        <span style="opacity: 0.7; font-size: 0.95rem;">
+                            Use the tabs above to manage databases, visualize tables, and run queries using the built-in <em>SQLly Console</em>.
+                        </span>
+                    </div>
+
+                    <div>
+                        <strong>2. Server REPL (Command Line)</strong><br>
+                        <span style="opacity: 0.7; font-size: 0.95rem;">
+                            For direct text-based interaction, use the terminal window where this server is running. In VS Code, you can find it in "DEBUG CONSOLE".
+                        </span>
+                        <div style="background-color: var(--console-bg); color: var(--console-text); padding: 12px; border-radius: 6px; font-family: 'Consolas', monospace; margin-top: 10px; font-size: 0.9rem; border: 1px solid var(--border);">
+                            =================================<br>
+                            SQLly REPL READY<br>
+                            Try: INSERT INTO users VALUES (1, "Admin", 99)<br>
+                            =================================<br>
+                            <br>
+                            SQLly&gt; <span class="blink">_</span>
+                        </div>
+                    </div>
+                </div>
+
                 <div>
                     <button class="btn" onclick="createNewDb()">Create New Database</button>
-                    <button class="btn btn-outline" onclick="showSection('console')">Open Console</button>
+                    <button class="btn btn-outline" onclick="showSection('console')">Open Web Console</button>
                     <button class="btn btn-outline" onclick="showSection('tutorial')">Learn SQL</button>
                 </div>
             </div>
@@ -142,5 +169,9 @@
     </div>
 
     <script src="/script.js"></script>
+    <style>
+        .blink { animation: blinker 1s linear infinite; }
+        @keyframes blinker { 50% { opacity: 0; } }
+    </style>
 </body>
 </html>

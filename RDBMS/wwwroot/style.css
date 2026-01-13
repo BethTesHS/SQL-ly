@@ -119,11 +119,11 @@ body {
 }
 
 /* Home */
-.hero {
+.main-content {
     text-align: center;
-    margin-top: 10vh;
+    /* margin-top: 10vh; */
 }
-.hero p {
+.main-content p {
     color: var(--text-color) !important; 
     opacity: 0.7;
 }
