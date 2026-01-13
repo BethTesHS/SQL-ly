@@ -14,7 +14,7 @@ namespace RDBMS.Engine
         {
             Name = name;
 
-            var userCols = new List<ColumnDef> 
+             var userCols = new List<ColumnDef> 
             { 
                 new ColumnDef { Name = "id", Type = DbType.Int, IsPrimaryKey = true },
                 new ColumnDef { Name = "username", Type = DbType.String },
@@ -47,8 +47,8 @@ namespace RDBMS.Engine
 
                 switch (command)
                 {
-                    case "CREATE": return HandleCreate(sql); // New Handler
-                    case "DROP": return HandleDrop(sql);     // New Handler
+                    case "CREATE": return HandleCreate(sql);
+                    case "DROP": return HandleDrop(sql);
                     case "INSERT": return HandleInsert(sql);
                     case "SELECT": return HandleSelect(sql);
                     case "UPDATE": return HandleUpdate(sql);
@@ -62,16 +62,15 @@ namespace RDBMS.Engine
             }
         }
 
-        // --- NEW HANDLERS ---
         private string HandleCreate(string sql)
         {
-            // Syntax: CREATE TABLE [name] (col1 type, col2 type)
+            // Syntax: CREATE TABLE [name] (col1 type [UNIQUE], col2 type)
             try {
                 var openParen = sql.IndexOf('(');
                 var closeParen = sql.LastIndexOf(')');
                 
                 if (openParen == -1 || closeParen == -1) 
-                    return "Syntax error. Usage: CREATE TABLE [name] (col type, ...)";
+                    return "Syntax error. Usage: CREATE TABLE [name] (col type [UNIQUE], ...)";
 
                 var headerPart = sql.Substring(0, openParen).Trim();
                 var bodyPart = sql.Substring(openParen + 1, closeParen - openParen - 1);
@@ -92,8 +91,11 @@ namespace RDBMS.Engine
                     var name = def[0];
                     var typeStr = def[1].ToLower();
                     
+                    // Check for UNIQUE constraint
+                    bool isUnique = def.Length > 2 && def[2].Equals("UNIQUE", StringComparison.OrdinalIgnoreCase);
+
                     var type = typeStr == "int" ? DbType.Int : DbType.String;
-                    columns.Add(new ColumnDef { Name = name, Type = type });
+                    columns.Add(new ColumnDef { Name = name, Type = type, IsUnique = isUnique });
                 }
 
                 // Enforce ID presence for this engine implementation
@@ -154,7 +156,7 @@ namespace RDBMS.Engine
 
         private string HandleSelect(string sql)
         {
-            if (sql.ToUpper().Contains("JOIN")) return HandleJoin(sql);
+            if (sql.ToUpper().Contains(" JOIN ")) return HandleJoin(sql);
 
             var parts = sql.Split(' ');
             var tableName = parts.Length > 3 ? parts[3] : "";
@@ -251,11 +253,16 @@ namespace RDBMS.Engine
 
         private string HandleJoin(string sql)
         {
+            // Syntax: SELECT * FROM t1 JOIN t2 ON t1.col = t2.col
             try
             {
                 var joinSplit = sql.Split(new[] { " JOIN ", " ON " }, StringSplitOptions.None);
+                
+                if (joinSplit.Length < 3) return "Syntax error. Usage: SELECT * FROM t1 JOIN t2 ON t1.c1 = t2.c2";
+
                 var table1Name = joinSplit[0].Split("FROM")[1].Trim();
                 var table2Name = joinSplit[1].Trim();
+                var condition = joinSplit[2].Trim(); // e.g., "users.id = orders.user_id"
                 
                 if(!Tables.ContainsKey(table1Name) || !Tables.ContainsKey(table2Name))
                     return "One or more tables not found.";
@@ -263,24 +270,49 @@ namespace RDBMS.Engine
                 var t1 = Tables[table1Name];
                 var t2 = Tables[table2Name];
 
+                // Parse Condition
+                var condParts = condition.Split('=');
+                if(condParts.Length != 2) return "Invalid JOIN condition. Use '='";
+
+                var leftOp = condParts[0].Trim().Split('.'); // users.id
+                var rightOp = condParts[1].Trim().Split('.'); // orders.user_id
+
+                if (leftOp.Length != 2 || rightOp.Length != 2) return "Cols must be formatted as table.col";
+
+                string t1Col = leftOp[0] == table1Name ? leftOp[1] : rightOp[1];
+                string t2Col = rightOp[0] == table2Name ? rightOp[1] : leftOp[1];
+
                 var results = new StringBuilder();
                 results.AppendLine($"--- JOIN RESULT ({table1Name} + {table2Name}) ---");
 
-                foreach (var r1 in t1.SelectAll())
+                var rows1 = t1.SelectAll();
+                var rows2 = t2.SelectAll();
+
+                foreach (var r1 in rows1)
                 {
-                    foreach (var r2 in t2.SelectAll())
+                    foreach (var r2 in rows2)
                     {
-                        if (r1.Id == (int)r2.Data["user_id"])
+                        var val1 = r1.Data.ContainsKey(t1Col) ? r1.Data[t1Col] : null;
+                        var val2 = r2.Data.ContainsKey(t2Col) ? r2.Data[t2Col] : null;
+
+                        // Basic Equality Check (converting to string to be safe)
+                        if (val1 != null && val2 != null && val1.ToString() == val2.ToString())
                         {
-                            results.AppendLine($"{r1.Data["username"]} bought {r2.Data["item"]}");
+                            results.Append($"{r1.Data["id"]} | "); // Show ID
+                            // Dump data from T1
+                            foreach(var kvp in r1.Data) if(kvp.Key != "id") results.Append($"{kvp.Value}, ");
+                            results.Append(" <-> ");
+                            // Dump data from T2
+                            foreach(var kvp in r2.Data) if(kvp.Key != "id") results.Append($"{kvp.Value}, ");
+                            results.AppendLine();
                         }
                     }
                 }
                 return results.ToString();
             }
-            catch
+            catch (Exception ex)
             {
-                return "Error parsing JOIN syntax.";
+                return $"Error parsing JOIN syntax: {ex.Message}";
             }
         }
 

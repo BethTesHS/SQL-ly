@@ -9,6 +9,7 @@ namespace RDBMS.Engine
         public TableSchema Schema { get; set; }
         private readonly string _filePath;
         public Dictionary<int, long> PrimaryKeyIndex { get; private set; } = new();
+        public Dictionary<string, HashSet<string>> UniqueIndexes { get; private set; } = new();
 
         public Table(string dbName, string tableName, List<ColumnDef> columns)
         {
@@ -18,6 +19,15 @@ namespace RDBMS.Engine
             
             _filePath = $"{safeDbName}_{safeTableName}.db"; 
             
+            // Initialize Unique Sets for unique columns
+            foreach(var col in Schema.Columns)
+            {
+                if (col.IsUnique && col.Name != "id")
+                {
+                    UniqueIndexes[col.Name] = new HashSet<string>();
+                }
+            }
+
             if (!File.Exists(_filePath)) InitFile();
             LoadIndex();
         }
@@ -27,7 +37,6 @@ namespace RDBMS.Engine
             using var fs = new FileStream(_filePath, FileMode.Create);
         }
 
-        // --- NEW METHOD ---
         public void Drop()
         {
             if (File.Exists(_filePath))
@@ -35,11 +44,12 @@ namespace RDBMS.Engine
                 File.Delete(_filePath);
             }
         }
-        // ------------------
 
         private void LoadIndex()
         {
             PrimaryKeyIndex.Clear();
+            foreach(var key in UniqueIndexes.Keys) UniqueIndexes[key].Clear();
+
             if (!File.Exists(_filePath)) return;
 
             using var fs = new FileStream(_filePath, FileMode.Open, FileAccess.Read);
@@ -53,13 +63,37 @@ namespace RDBMS.Engine
                     bool isDeleted = reader.ReadBoolean();
                     int id = reader.ReadInt32();
 
-                    if (!isDeleted) PrimaryKeyIndex[id] = currentPos;
+                    // Read values to populate indices
+                    var rowValues = new Dictionary<string, string>();
 
                     foreach (var col in Schema.Columns)
                     {
                         if (col.Name == "id") continue;
-                        if (col.Type == DbType.Int) reader.ReadInt32();
-                        else if (col.Type == DbType.String) reader.ReadString();
+                        
+                        if (col.Type == DbType.Int) 
+                        {
+                            var val = reader.ReadInt32().ToString();
+                            rowValues[col.Name] = val;
+                        }
+                        else 
+                        {
+                            var val = reader.ReadString();
+                            rowValues[col.Name] = val;
+                        }
+                    }
+
+                    if (!isDeleted) 
+                    {
+                        PrimaryKeyIndex[id] = currentPos;
+                        
+                        // Populate Unique Indices
+                        foreach(var kvp in UniqueIndexes)
+                        {
+                            if(rowValues.ContainsKey(kvp.Key))
+                            {
+                                kvp.Value.Add(rowValues[kvp.Key]);
+                            }
+                        }
                     }
                 }
             }
@@ -70,6 +104,19 @@ namespace RDBMS.Engine
         {
             if (PrimaryKeyIndex.ContainsKey(row.Id))
                 throw new Exception($"Duplicate Primary Key: {row.Id}");
+
+            // Check Unique Constraints
+            foreach(var col in Schema.Columns)
+            {
+                if (col.IsUnique && col.Name != "id")
+                {
+                    var val = row.Data[col.Name].ToString();
+                    if (UniqueIndexes.ContainsKey(col.Name) && UniqueIndexes[col.Name].Contains(val!))
+                    {
+                        throw new Exception($"Violation of UNIQUE constraint on column '{col.Name}'. Value '{val}' already exists.");
+                    }
+                }
+            }
 
             using var fs = new FileStream(_filePath, FileMode.Append);
             using var writer = new BinaryWriter(fs);
@@ -87,6 +134,15 @@ namespace RDBMS.Engine
             }
 
             PrimaryKeyIndex[row.Id] = pos;
+
+            // Update Unique Indices
+            foreach(var col in Schema.Columns)
+            {
+                if (col.IsUnique && col.Name != "id")
+                {
+                    UniqueIndexes[col.Name].Add(row.Data[col.Name].ToString()!);
+                }
+            }
         }
 
         public void Delete(int id)
@@ -94,13 +150,28 @@ namespace RDBMS.Engine
             if (!PrimaryKeyIndex.ContainsKey(id))
                 throw new Exception($"Record with ID {id} not found.");
 
+            // We need to fetch the row first to remove values from UniqueIndexes
+            var row = SelectById(id);
+            if (row != null)
+            {
+                foreach(var col in Schema.Columns)
+                {
+                    if (col.IsUnique && col.Name != "id")
+                    {
+                        var val = row.Data[col.Name].ToString();
+                        if (UniqueIndexes.ContainsKey(col.Name))
+                            UniqueIndexes[col.Name].Remove(val!);
+                    }
+                }
+            }
+
             long offset = PrimaryKeyIndex[id];
 
             using var fs = new FileStream(_filePath, FileMode.Open, FileAccess.Write);
             using var writer = new BinaryWriter(fs);
 
             fs.Seek(offset, SeekOrigin.Begin);
-            writer.Write(true); 
+            writer.Write(true);
 
             PrimaryKeyIndex.Remove(id);
         }

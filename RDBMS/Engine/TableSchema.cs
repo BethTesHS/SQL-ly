@@ -10,6 +10,7 @@ namespace RDBMS.Engine
         public required string Name { get; set; }
         public DbType Type { get; set; }
         public bool IsPrimaryKey { get; set; }
+        public bool IsUnique { get; set; }
     }
 
     public class TableSchema
