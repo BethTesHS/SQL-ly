@@ -1,7 +1,3 @@
-Here is the `README.md` content based on the project files provided.
-
----
-
 # SQLly
 
 **SQLly** is a lightweight, file-based Relational Database Management System (RDBMS) running on **.NET 9.0**. It provides a custom SQL query engine with support for basic CRUD operations, joins, and schema management, accessible via a web-based console or a server-side REPL.
@@ -23,28 +19,18 @@ Before running this project, ensure you have the following installed:
 
 ## Setup and Installation
 
-1. **Clone the repository:**
-```bash
-git clone <repository-url>
-cd bethteshs/sqlly/SQLly-b135c2bad768d6c7fb5add7ef94b0fc9e987302c
-
-```
-
-
-2. **Navigate to the project directory:**
+1. **Clone the repository and navigate to the project directory:**
 ```bash
 cd RDBMS
 
 ```
 
 
-3. **Restore dependencies:**
+2. **Restore dependencies:**
 ```bash
 dotnet restore
 
 ```
-
-
 
 ## How to Run
 
